@@ -8,21 +8,16 @@ const roomDetails = [];
 require('dotenv').config();
 
 const defaultConnectionDetails = {
-  PORT: 5000,
+  PORT: 8081,
   HOST: `0.0.0.0`,
 };
 
 // Initialize http server
 httpServer = http
-  .createServer(() =>
-    console.log(
-      process.env.PORT || defaultConnectionDetails.PORT,
-      process.env.HOST || defaultConnectionDetails.HOST,
-    ),
-  )
+  .createServer()
   .listen(
     process.env.PORT || defaultConnectionDetails.PORT,
-    process.env.HOST || defaultConnectionDetails.HOST,
+    // process.env.HOST || defaultConnectionDetails.HOST,
   );
 console.log('Server running.');
 
@@ -42,8 +37,8 @@ io.on('connection', socket => {
       roomDetails[roomName] = {
         queue: [],
         playingVideo: {},
-        // playingVideoTime: 0,
-        // playingVideoDuration: 0,
+        playbackStatus: false,
+        video
         // videoStoppedTime: 0,
         // videoStoppedTimeAll: 0,
         // isVideoPlaying: false,
@@ -52,6 +47,7 @@ io.on('connection', socket => {
     }
     console.log('synchronizing playlist', roomDetails[roomName].queue);
     socket.emit('synchronizePlayList', roomDetails[roomName].queue);
+    socket.emit('playbackStatus', roomDetails[roomName].playbackStatus);
   });
 
   socket.on('search', searchTerm => {
@@ -69,6 +65,7 @@ io.on('connection', socket => {
     );
   });
   // END Socket behavior for single client
+
   // { title, videoId, description, author }
   // Socket behavior for all clients
   socket.on('play', video => {
@@ -88,10 +85,14 @@ io.on('connection', socket => {
   });
 
   socket.on('addToPlaylist', video => {
-    console.log(roomDetails[roomName].queue.push(video));
-
+    roomDetails[roomName].queue.push(video);
+    
     synchronizePlaylist();
   });
+
+  socket.on('setProgress', val => {
+    console.log(val);
+  })
 
   socket.on('deleteFromPlaylist', index => {
     const room = roomDetails[roomName];
