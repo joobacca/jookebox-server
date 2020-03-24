@@ -9,10 +9,10 @@ require('dotenv').config();
 
 // Initialize http server
 httpServer = http.createServer();
-  
+
 console.log('Server running.');
 
-var io = require('socket.io').listen(httpServer);
+var io = require('socket.io').listen(httpServer, { origins: '*:*'});
 httpServer.listen(8081);
 
 io.on('connection', socket => {
@@ -29,17 +29,23 @@ io.on('connection', socket => {
       roomDetails[roomName] = {
         queue: [],
         playingVideo: {},
-        playbackStatus: false,
-        // video
+        playbackState: false,
+        videoPausedAt: 0,
+        videoStartedAt: 0,
         // videoStoppedTime: 0,
         // videoStoppedTimeAll: 0,
         // isVideoPlaying: false,
         // stopWatch: 0
       };
     }
-    console.log('synchronizing playlist', roomDetails[roomName].queue);
-    socket.emit('synchronizePlayList', roomDetails[roomName].queue);
-    socket.emit('playbackStatus', roomDetails[roomName].playbackStatus);
+
+    const room = roomDetails[roomName];
+    console.log('synchronizing playlist', room.queue);
+    socket.emit('synchronizePlayList', room.queue);
+    if(room.playbackState) {
+      socket.emit('playAt', )
+    }
+    socket.emit('playbackState', room.playbackState);
   });
 
   socket.on('search', searchTerm => {
@@ -60,11 +66,15 @@ io.on('connection', socket => {
 
   // { title, videoId, description, author }
   // Socket behavior for all clients
-  socket.on('play', video => {
-    roomDetails[roomName].playingVideo = video;
-    console.log('playing: ' + video);
+  socket.on('toggle', ({ playbackState, time }) => {
+    const room = roomDetails[roomName];
+    room.playbackState = !playbackState;
+    room.videoPausedAt = time;
 
-    emitToRoom('playVideo', video);
+    emitToRoom('toggle', {
+      state: room.playbackState,
+      time: room.videoPausedAt,
+    });
   });
 
   socket.on('playNext', () => {
@@ -78,13 +88,13 @@ io.on('connection', socket => {
 
   socket.on('addToPlaylist', video => {
     roomDetails[roomName].queue.push(video);
-    
+
     synchronizePlaylist();
   });
 
   socket.on('setProgress', val => {
     console.log(val);
-  })
+  });
 
   socket.on('deleteFromPlaylist', index => {
     const room = roomDetails[roomName];
@@ -102,7 +112,7 @@ io.on('connection', socket => {
   // Helper methods emitting to all sockets in the room
   const synchronizePlaylist = () => {
     emitToRoom('synchronizePlayList', roomDetails[roomName].queue);
-    roomDetails[roomName].queue.forEach(el => console.log(el.title))
+    roomDetails[roomName].queue.forEach(el => console.log(el.title));
   };
 
   const emitToRoom = (type, payload) => {
