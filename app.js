@@ -1,27 +1,19 @@
 var http = require('http');
 var httpServer;
-var moment = require('moment');
+// var moment = require('moment');
 var yts = require('yt-search');
 
 const roomDetails = [];
 
 require('dotenv').config();
 
-const defaultConnectionDetails = {
-  PORT: 8081,
-  HOST: `0.0.0.0`,
-};
-
 // Initialize http server
-httpServer = http
-  .createServer()
-  .listen(
-    process.env.PORT || defaultConnectionDetails.PORT,
-    // process.env.HOST || defaultConnectionDetails.HOST,
-  );
+httpServer = http.createServer();
+  
 console.log('Server running.');
 
-var io = require('socket.io')(httpServer);
+var io = require('socket.io').listen(httpServer);
+httpServer.listen(8081);
 
 io.on('connection', socket => {
   console.log('Socket connected.');
@@ -38,7 +30,7 @@ io.on('connection', socket => {
         queue: [],
         playingVideo: {},
         playbackStatus: false,
-        video
+        // video
         // videoStoppedTime: 0,
         // videoStoppedTimeAll: 0,
         // isVideoPlaying: false,
