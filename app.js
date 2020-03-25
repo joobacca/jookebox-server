@@ -1,7 +1,8 @@
 var http = require('http');
 var httpServer;
-// var moment = require('moment');
+var moment = require('moment');
 var yts = require('yt-search');
+var StopWatch = require('./stopwatch');
 
 const roomDetails = [];
 
@@ -12,8 +13,21 @@ httpServer = http.createServer();
 
 console.log('Server running.');
 
-var io = require('socket.io').listen(httpServer, { origins: '*:*'});
-httpServer.listen(8081);
+
+// Timer test
+
+// const Timer = new StopWatch(5);
+// Timer.timer.then(res => {
+//   console.log(res);
+//   Timer.stop();
+// });
+
+// setTimeout(() => Timer.pause(), 2000);
+
+// setTimeout(() => Timer.continue(), 4000);
+
+var io = require('socket.io').listen(httpServer, { origins: '*:*' });
+httpServer.listen(8081, { origins: '*:*' });
 
 io.on('connection', socket => {
   console.log('Socket connected.');
@@ -30,21 +44,17 @@ io.on('connection', socket => {
         queue: [],
         playingVideo: {},
         playbackState: false,
-        videoPausedAt: 0,
         videoStartedAt: 0,
-        // videoStoppedTime: 0,
-        // videoStoppedTimeAll: 0,
-        // isVideoPlaying: false,
-        // stopWatch: 0
+        videoOffset: 0,
       };
     }
 
     const room = roomDetails[roomName];
-    console.log('synchronizing playlist', room.queue);
+
     socket.emit('synchronizePlayList', room.queue);
-    if(room.playbackState) {
-      socket.emit('playAt', )
-    }
+    // if(room.playbackState) {
+    //   socket.emit('playAt', )
+    // }
     socket.emit('playbackState', room.playbackState);
   });
 
@@ -68,21 +78,25 @@ io.on('connection', socket => {
   // Socket behavior for all clients
   socket.on('toggle', ({ playbackState, time }) => {
     const room = roomDetails[roomName];
-    room.playbackState = !playbackState;
-    room.videoPausedAt = time;
 
+    if(room.playbackState) {
+      room.playbackState = false;
+    } else {
+      play(room.playingVideo, room.videoOffset, false);
+    }
     emitToRoom('toggle', {
       state: room.playbackState,
-      time: room.videoPausedAt,
+      time: room.videoOffset,
     });
   });
 
   socket.on('playNext', () => {
     const room = roomDetails[roomName];
-    room.playingVideo = roomDetails[roomName].queue[0];
+
+    const video = roomDetails[roomName].queue[0];
     room.queue.shift();
 
-    emitToRoom('playVideo', room.playingVideo);
+    play(video);
     synchronizePlaylist();
   });
 
@@ -98,10 +112,10 @@ io.on('connection', socket => {
 
   socket.on('deleteFromPlaylist', index => {
     const room = roomDetails[roomName];
+
     if (room.queue[index]) {
       room.queue.splice(index, 1);
     } else {
-      console.log('synchronizing playlist');
       socket.emit('synchronizePlayList', room.queue);
     }
 
@@ -110,9 +124,19 @@ io.on('connection', socket => {
   // END Socket behavior for all clients
 
   // Helper methods emitting to all sockets in the room
+  const play = (video, offset = 0, initial = false) => {
+    const room = roomDetails[roomName];
+
+    room.videoStartedAt = initial ? moment() : room.videoStartedAt;
+    room.playbackState = true;
+    room.playingVideo = video;
+    room.videoOffset = offset;
+
+    emitToRoom('play', { video, offset });
+  };
+
   const synchronizePlaylist = () => {
     emitToRoom('synchronizePlayList', roomDetails[roomName].queue);
-    roomDetails[roomName].queue.forEach(el => console.log(el.title));
   };
 
   const emitToRoom = (type, payload) => {
