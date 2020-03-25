@@ -11,9 +11,21 @@ class StopWatch {
 
   timer;
 
+  // // separate function as attribute to make the interval more independant
+  // interval = resolve =>
+  //   setInterval(() => {
+  //     // if (!this.paused) console.log(this.getSeconds());
+  //     if (this.getSeconds() >= this.limit && !this.paused) {
+  //       resolve(true);
+
+  //       clearInterval(this.interval);
+  //     }
+  //   }, 1000);
+
   // limit is in seconds
   constructor(limit) {
-    if(limit !== null) {
+    if (limit !== null) {
+      console.log('correct limit triggered');
       this.constructorLimit = limit;
       this.start();
     }
@@ -27,23 +39,27 @@ class StopWatch {
   start(limit = this.constructorLimit) {
     this.paused = false;
     this.pausedOffset = 0;
+    this.limit = limit;
     this.startedAt = moment();
     this.timer = new Promise((resolve, reject) => {
-      var interval = setInterval(() => {
-        if(!this.paused) console.log(this.getSeconds(moment() - this.pausedOffset - this.startedAt));
-        if (
-          this.getSeconds(moment() - this.pausedOffset - this.startedAt) >=
-            limit &&
-          !this.paused
-        ) {
+      const interval = setInterval(() => {
+        // if (!this.paused) console.log(this.getSeconds());
+        if (this.getSeconds() >= this.limit && !this.paused) {
           resolve(true);
           clearInterval(interval);
         }
       }, 1000);
+
     });
   }
 
-  continue () {
+  getPercent(callback) {
+    if (callback) {
+      return callback(getSeconds() / limit);
+    }
+  }
+
+  continue() {
     this.paused = false;
     this.pausedOffset += moment() - this.pausedTime;
   }
@@ -53,11 +69,20 @@ class StopWatch {
     this.pausedOffset = 0;
     this.startedAt = 0;
     this.timer = null;
+
+    clearInterval(this.interval);
   }
 
-  getSeconds(ms) {
-    return Math.floor((ms / 1000) % 60);
+  getSeconds() {
+    return milliToSeconds(
+      moment() -
+        this.pausedOffset -
+        this.startedAt -
+        (this.paused ? this.pausedAt : 0),
+    );
   }
 }
+
+const milliToSeconds = ms => Math.floor((ms / 1000) % 60);
 
 module.exports = StopWatch;

@@ -13,7 +13,6 @@ httpServer = http.createServer();
 
 console.log('Server running.');
 
-
 // Timer test
 
 // const Timer = new StopWatch(5);
@@ -44,17 +43,18 @@ io.on('connection', socket => {
         queue: [],
         playingVideo: {},
         playbackState: false,
-        videoStartedAt: 0,
-        videoOffset: 0,
+        stopwatch: new StopWatch(),
+        progress: 0,
+        pausedAt: 0,
       };
     }
 
     const room = roomDetails[roomName];
 
     socket.emit('synchronizePlayList', room.queue);
-    // if(room.playbackState) {
-    //   socket.emit('playAt', )
-    // }
+    socket.emit('playVideo', room.playingVideo);
+    socket.emit('setOffset', room.stopwatch.getSeconds());
+
     socket.emit('playbackState', room.playbackState);
   });
 
@@ -67,7 +67,6 @@ io.on('connection', socket => {
       },
       (err, r) => {
         if (err) throw new Error(err);
-        console.log('searched');
         socket.emit('searchResults', r.videos);
       },
     );
@@ -79,26 +78,27 @@ io.on('connection', socket => {
   socket.on('toggle', ({ playbackState, time }) => {
     const room = roomDetails[roomName];
 
-    if(room.playbackState) {
+    if (room.playbackState) {
       room.playbackState = false;
+      room.stopwatch.pause();
+      // room.pausedAt = room.stopwatch.getSeconds();
     } else {
-      play(room.playingVideo, room.videoOffset, false);
+      room.playbackState = true;
+      room.stopwatch.continue();
     }
+
     emitToRoom('toggle', {
       state: room.playbackState,
-      time: room.videoOffset,
     });
   });
 
-  socket.on('playNext', () => {
-    const room = roomDetails[roomName];
+  socket.on('play', video => {
+    playNext(video);
 
-    const video = roomDetails[roomName].queue[0];
-    room.queue.shift();
-
-    play(video);
-    synchronizePlaylist();
+    emitToRoom('playVideo', video);
   });
+
+  socket.on('playNext', () => playNext());
 
   socket.on('addToPlaylist', video => {
     roomDetails[roomName].queue.push(video);
@@ -108,6 +108,11 @@ io.on('connection', socket => {
 
   socket.on('setProgress', val => {
     console.log(val);
+    emitToRoom(
+      'setProgress',
+      (val / roomDetails[roomName].playingVideo.duration) * 100,
+    );
+    // this is too much power for one man to handle
   });
 
   socket.on('deleteFromPlaylist', index => {
@@ -124,15 +129,21 @@ io.on('connection', socket => {
   // END Socket behavior for all clients
 
   // Helper methods emitting to all sockets in the room
-  const play = (video, offset = 0, initial = false) => {
+  const playNext = video => {
     const room = roomDetails[roomName];
 
-    room.videoStartedAt = initial ? moment() : room.videoStartedAt;
-    room.playbackState = true;
-    room.playingVideo = video;
-    room.videoOffset = offset;
+    room.playingVideo = video ? video : roomDetails[roomName].queue[0];
+    if (room.queue.length > 0 && !video) {
+      room.queue.shift();
+    }
+    if (room.playingVideo) {
+      room.playbackState = true;
+      room.stopwatch = new StopWatch(room.playingVideo.duration);
+      room.stopwatch.timer.then(() => playNext());
+    }
 
-    emitToRoom('play', { video, offset });
+    emitToRoom('playVideo', room.playingVideo);
+    synchronizePlaylist();
   };
 
   const synchronizePlaylist = () => {
