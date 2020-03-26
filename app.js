@@ -44,8 +44,6 @@ io.on('connection', socket => {
         playingVideo: {},
         playbackState: false,
         stopwatch: new StopWatch(),
-        progress: 0,
-        pausedAt: 0,
       };
     }
 
@@ -53,9 +51,8 @@ io.on('connection', socket => {
 
     socket.emit('synchronizePlayList', room.queue);
     socket.emit('playVideo', room.playingVideo);
-    socket.emit('setOffset', room.stopwatch.getSeconds());
-
     socket.emit('playbackState', room.playbackState);
+    socket.emit('setProgress', room.stopwatch.getSeconds());
   });
 
   socket.on('search', searchTerm => {
@@ -75,7 +72,7 @@ io.on('connection', socket => {
 
   // { title, videoId, description, author }
   // Socket behavior for all clients
-  socket.on('toggle', ({ playbackState, time }) => {
+  socket.on('toggle', ({ playbackState }) => {
     const room = roomDetails[roomName];
 
     if (room.playbackState) {
@@ -107,12 +104,8 @@ io.on('connection', socket => {
   });
 
   socket.on('setProgress', val => {
-    console.log(val);
-    emitToRoom(
-      'setProgress',
-      (val / roomDetails[roomName].playingVideo.duration) * 100,
-    );
-    // this is too much power for one man to handle
+    emitToRoom('setProgress', val);
+    // nvm it was easy all along lmao
   });
 
   socket.on('deleteFromPlaylist', index => {
@@ -120,8 +113,6 @@ io.on('connection', socket => {
 
     if (room.queue[index]) {
       room.queue.splice(index, 1);
-    } else {
-      socket.emit('synchronizePlayList', room.queue);
     }
 
     synchronizePlaylist();
@@ -131,11 +122,15 @@ io.on('connection', socket => {
   // Helper methods emitting to all sockets in the room
   const playNext = video => {
     const room = roomDetails[roomName];
-
-    room.playingVideo = video ? video : roomDetails[roomName].queue[0];
-    if (room.queue.length > 0 && !video) {
+    if(!video) {
+      if(!room.queue[0]) {
+        emitToRoom('emptyPlayback');
+        synchronizePlaylist();
+        return;
+      }
       room.queue.shift();
     }
+    room.playingVideo = video ? video : room.queue[0];
     if (room.playingVideo) {
       room.playbackState = true;
       room.stopwatch = new StopWatch(room.playingVideo.duration);
