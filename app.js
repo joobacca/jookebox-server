@@ -1,4 +1,3 @@
-const https = require('https');
 const moment = require('moment');
 const yts = require('yt-search');
 const StopWatch = require('./stopwatch');
@@ -8,13 +7,20 @@ const roomDetails = [];
 
 require('dotenv').config();
 
-// Initialize http server
-const options = {
-  key: fs.readFileSync(process.env.SSL_KEY),
-  cert: fs.readFileSync(process.env.SSL_CERT),
-}
 
-const server = https.createServer(options);
+var server;
+if(process.env.ENV === 'development') {
+  const http = require('http');
+  server = http.createServer();
+} else {
+  // Initialize http server
+  const https = require('https');
+  const options = {
+    key: fs.readFileSync(process.env.SSL_KEY),
+    cert: fs.readFileSync(process.env.SSL_CERT),
+  }
+  server = https.createServer(options);
+}
 
 console.log('Server running.');
 
@@ -31,7 +37,7 @@ console.log('Server running.');
 // setTimeout(() => Timer.continue(), 4000);
 
 var io = require('socket.io').listen(server, { origins: '*:*' });
-server.listen(8081, { origins: '*:*' });
+server.listen(8081);
 
 io.on('connection', socket => {
   console.log('Socket connected.');
@@ -49,6 +55,7 @@ io.on('connection', socket => {
         playingVideo: {},
         playbackState: false,
         stopwatch: new StopWatch(),
+        userList: []
       };
     }
 
@@ -58,6 +65,7 @@ io.on('connection', socket => {
     socket.emit('playVideo', room.playingVideo);
     socket.emit('playbackState', room.playbackState);
     socket.emit('setProgress', room.stopwatch.getSeconds());
+    socket.emit('synchronizeUserList', room.userList);
   });
 
   socket.on('search', searchTerm => {
