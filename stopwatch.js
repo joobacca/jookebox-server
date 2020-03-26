@@ -38,7 +38,8 @@ class StopWatch {
   start(limit = this.constructorLimit) {
     this.paused = false;
     this.pausedOffset = 0;
-    this.limit = limit;
+    // adding one second to limit because... buffer....
+    this.limit = limit + 1;
     this.startedAt = moment();
     this.timer = new Promise((resolve, reject) => {
       const interval = setInterval(() => {
