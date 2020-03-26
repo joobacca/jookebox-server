@@ -1,15 +1,20 @@
-var http = require('http');
-var httpServer;
-var moment = require('moment');
-var yts = require('yt-search');
-var StopWatch = require('./stopwatch');
+const https = require('https');
+const moment = require('moment');
+const yts = require('yt-search');
+const StopWatch = require('./stopwatch');
+const fs = require('fs');
 
 const roomDetails = [];
 
 require('dotenv').config();
 
 // Initialize http server
-httpServer = http.createServer();
+const options = {
+  key: fs.readFileSync(process.env.SSL_KEY),
+  cert: fs.readFileSync(process.env.SSL_CERT),
+}
+
+const server = https.createServer(options);
 
 console.log('Server running.');
 
@@ -25,8 +30,8 @@ console.log('Server running.');
 
 // setTimeout(() => Timer.continue(), 4000);
 
-var io = require('socket.io').listen(httpServer, { origins: '*:*' });
-httpServer.listen(8081, { origins: '*:*' });
+var io = require('socket.io').listen(server, { origins: '*:*' });
+server.listen(8081, { origins: '*:*' });
 
 io.on('connection', socket => {
   console.log('Socket connected.');
