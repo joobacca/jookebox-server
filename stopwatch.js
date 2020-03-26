@@ -25,7 +25,6 @@ class StopWatch {
   // limit is in seconds
   constructor(limit) {
     if (limit !== null) {
-      console.log('correct limit triggered');
       this.constructorLimit = limit;
       this.start();
     }

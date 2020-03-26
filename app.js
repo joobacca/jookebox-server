@@ -104,8 +104,6 @@ io.on('connection', socket => {
 
   socket.on('play', video => {
     playNext(video);
-
-    emitToRoom('playVideo', video);
   });
 
   socket.on('playNext', () => playNext());
@@ -135,15 +133,16 @@ io.on('connection', socket => {
   // Helper methods emitting to all sockets in the room
   const playNext = video => {
     const room = roomDetails[roomName];
-    if(!video) {
-      if(!room.queue[0]) {
-        emitToRoom('emptyPlayback');
+    if(!video && room.queue.length === 0) {
+      console.log('empty playlist, will delete current video');
+      emitToRoom('emptyPlayback');
         synchronizePlaylist();
         return;
-      }
-      room.queue.shift();
     }
     room.playingVideo = video ? video : room.queue[0];
+    if(!video) {
+      room.queue.shift();
+    }
     if (room.playingVideo) {
       room.playbackState = true;
       room.stopwatch = new StopWatch(room.playingVideo.duration);
