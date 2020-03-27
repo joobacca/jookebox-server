@@ -7,9 +7,8 @@ const roomDetails = [];
 
 require('dotenv').config();
 
-
 var server;
-if(process.env.ENV === 'development') {
+if (process.env.ENV === 'development') {
   const http = require('http');
   server = http.createServer();
 } else {
@@ -18,7 +17,7 @@ if(process.env.ENV === 'development') {
   const options = {
     key: fs.readFileSync(process.env.SSL_KEY),
     cert: fs.readFileSync(process.env.SSL_CERT),
-  }
+  };
   server = https.createServer(options);
 }
 
@@ -55,7 +54,7 @@ io.on('connection', socket => {
         playingVideo: {},
         playbackState: false,
         stopwatch: new StopWatch(),
-        userList: []
+        userList: [],
       };
     }
 
@@ -97,9 +96,7 @@ io.on('connection', socket => {
       room.stopwatch.continue();
     }
 
-    emitToRoom('toggle', {
-      state: room.playbackState,
-    });
+    emitToRoom('toggle', room.playbackState);
   });
 
   socket.on('play', video => {
@@ -115,6 +112,8 @@ io.on('connection', socket => {
   });
 
   socket.on('setProgress', val => {
+    const room = roomDetails[roomName];
+    room.stopwatch.setTime(val);
     emitToRoom('setProgress', val);
     // nvm it was easy all along lmao
   });
@@ -133,14 +132,15 @@ io.on('connection', socket => {
   // Helper methods emitting to all sockets in the room
   const playNext = video => {
     const room = roomDetails[roomName];
-    if(!video && room.queue.length === 0) {
+    room.stopwatch.stop();
+    if (!video && room.queue.length === 0) {
       console.log('empty playlist, will delete current video');
       emitToRoom('emptyPlayback');
-        synchronizePlaylist();
-        return;
+      synchronizePlaylist();
+      return;
     }
     room.playingVideo = video ? video : room.queue[0];
-    if(!video) {
+    if (!video) {
       room.queue.shift();
     }
     if (room.playingVideo) {
