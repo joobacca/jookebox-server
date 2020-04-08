@@ -1,4 +1,3 @@
-const moment = require('moment');
 const yts = require('yt-search');
 const StopWatch = require('./stopwatch');
 const fs = require('fs');
@@ -8,11 +7,13 @@ const roomDetails = [];
 require('dotenv').config();
 
 var server;
+
 if (process.env.ENV === 'development') {
+  // Initialize http server
   const http = require('http');
   server = http.createServer();
 } else {
-  // Initialize http server
+  // or https server
   const https = require('https');
   const options = {
     key: fs.readFileSync(process.env.SSL_KEY),
@@ -20,33 +21,20 @@ if (process.env.ENV === 'development') {
   };
   server = https.createServer(options);
 }
-
+server.listen(8081);
 console.log('Server running.');
 
-// Timer test
-
-// const Timer = new StopWatch(5);
-// Timer.timer.then(res => {
-//   console.log(res);
-//   Timer.stop();
-// });
-
-// setTimeout(() => Timer.pause(), 2000);
-
-// setTimeout(() => Timer.continue(), 4000);
-
 var io = require('socket.io').listen(server, { origins: '*:*' });
-server.listen(8081);
 
-io.on('connection', socket => {
+io.on('connection', (socket) => {
   console.log('Socket connected.');
   let roomName = 'default';
+  let userName = '';
 
   // Socket behavior for single client
-  socket.on('joinRoom', path => {
-    console.log('user joined room: ' + path);
-    roomName = path;
-    socket.join(roomName);
+  socket.on('joinRoom', ({ room: roomNameClient, id }) => {
+    roomName = roomNameClient;
+    userName = id;
 
     if (!roomDetails[roomName]) {
       roomDetails[roomName] = {
@@ -58,16 +46,26 @@ io.on('connection', socket => {
       };
     }
 
-    const room = roomDetails[roomName];
+    if (!socket.rooms[roomName]) {
+      socket.join(roomName);
+      console.log('user joined room: ' + roomName);
+      roomDetails[roomName].userList.push(userName);
+    }
 
-    socket.emit('synchronizePlayList', room.queue);
-    socket.emit('playVideo', room.playingVideo);
-    socket.emit('playbackState', room.playbackState);
-    socket.emit('setProgress', room.stopwatch.getSeconds());
-    socket.emit('synchronizeUserList', room.userList);
+    socket.emit('synchronizePlayList', roomDetails[roomName].queue);
+    socket.emit('playVideo', roomDetails[roomName].playingVideo);
+    socket.emit('playbackState', roomDetails[roomName].playbackState);
+    socket.emit('setProgress', roomDetails[roomName].stopwatch.getSeconds());
+    socket.emit('synchronizeUserList', roomDetails[roomName].userList);
   });
 
-  socket.on('search', searchTerm => {
+  // @@TODO destroy room object on last leave
+  socket.on('disconnect', () => {
+    const list = roomDetails[roomName].userList;
+    if (list) list.splice(list.indexOf(userName));
+  });
+
+  socket.on('search', (searchTerm) => {
     yts(
       {
         query: searchTerm,
@@ -84,77 +82,90 @@ io.on('connection', socket => {
 
   // { title, videoId, description, author }
   // Socket behavior for all clients
-  socket.on('toggle', ({ playbackState }) => {
-    const room = roomDetails[roomName];
-
-    if (room.playbackState) {
-      room.playbackState = false;
-      room.stopwatch.pause();
-      // room.pausedAt = room.stopwatch.getSeconds();
+  socket.on('toggle', () => {
+    if (roomDetails[roomName].playbackState) {
+      roomDetails[roomName].playbackState = false;
+      roomDetails[roomName].stopwatch.pause();
+      // roomDetails[roomName].pausedAt = roomDetails[roomName].stopwatch.getSeconds();
     } else {
-      room.playbackState = true;
-      room.stopwatch.continue();
+      roomDetails[roomName].playbackState = true;
+      roomDetails[roomName].stopwatch.continue();
     }
 
-    emitToRoom('toggle', room.playbackState);
+    emitToRoom('toggle', roomDetails[roomName].playbackState);
   });
 
-  socket.on('play', video => {
+  socket.on('play', (video) => {
     playNext(video);
   });
 
   socket.on('playNext', () => playNext());
 
-  socket.on('addToPlaylist', video => {
+  socket.on('addToPlaylist', (video) => {
     roomDetails[roomName].queue.push(video);
 
     synchronizePlaylist();
   });
 
-  socket.on('setProgress', val => {
-    const room = roomDetails[roomName];
-    room.stopwatch.setTime(val);
-    emitToRoom('setProgress', val);
-    // nvm it was easy all along lmao
-  });
+  // socket.on('setProgress', (val) => {
+  //   roomDetails[roomName].stopwatch.setTime(val);
+  //   emitToRoomExceptHimself('setTime', val);
+  // });
 
-  socket.on('deleteFromPlaylist', index => {
-    const room = roomDetails[roomName];
-
-    if (room.queue[index]) {
-      room.queue.splice(index, 1);
+  socket.on('deleteFromPlaylist', (index) => {
+    if (roomDetails[roomName].queue[index]) {
+      roomDetails[roomName].queue.splice(index, 1);
     }
 
     synchronizePlaylist();
   });
+
+  socket.on('clearInterval', () => {
+    roomDetails[roomName].stopwatch.clearInt();
+  });
   // END Socket behavior for all clients
 
   // Helper methods emitting to all sockets in the room
-  const playNext = video => {
-    const room = roomDetails[roomName];
-    room.stopwatch.stop();
-    if (!video && room.queue.length === 0) {
+  const playNext = (video) => {
+    roomDetails[roomName].stopwatch.stop();
+    if (!video && roomDetails[roomName].queue.length === 0) {
       console.log('empty playlist, will delete current video');
       emitToRoom('emptyPlayback');
       synchronizePlaylist();
       return;
     }
-    room.playingVideo = video ? video : room.queue[0];
+    roomDetails[roomName].playingVideo = video
+      ? video
+      : roomDetails[roomName].queue[0];
     if (!video) {
-      room.queue.shift();
+      roomDetails[roomName].queue.shift();
     }
-    if (room.playingVideo) {
-      room.playbackState = true;
-      room.stopwatch = new StopWatch(room.playingVideo.duration);
-      room.stopwatch.timer.then(() => playNext());
+    if (roomDetails[roomName].playingVideo) {
+      emitToRoom('playVideo', roomDetails[roomName].playingVideo);
+
+      const synchronizeProgress = () => {
+        emitToRoom('setTime', roomDetails[roomName].stopwatch.getSeconds());
+      };
+
+      roomDetails[roomName].playbackState = true;
+      console.log('video set, let"ts start watching'); 
+      roomDetails[roomName].stopwatch = new StopWatch(
+        roomDetails[roomName].playingVideo.duration,
+        synchronizeProgress,
+      );
+      roomDetails[roomName].stopwatch.timer.then(() => playNext());
     }
 
-    emitToRoom('playVideo', room.playingVideo);
     synchronizePlaylist();
   };
 
   const synchronizePlaylist = () => {
     emitToRoom('synchronizePlayList', roomDetails[roomName].queue);
+  };
+
+  const emitToRoomExceptHimself = (type, payload) => {
+    socket.emit(type, payload);
+    io.to(roomName).emit(type, payload);
   };
 
   const emitToRoom = (type, payload) => {
