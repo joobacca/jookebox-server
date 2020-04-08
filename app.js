@@ -1,5 +1,5 @@
 const yts = require('yt-search');
-const StopWatch = require('./stopwatch');
+const StopWatch = require('./stopwatch_old');
 const fs = require('fs');
 
 const roomDetails = [];
@@ -35,6 +35,7 @@ io.on('connection', (socket) => {
   socket.on('joinRoom', ({ room: roomNameClient, id }) => {
     roomName = roomNameClient;
     userName = id;
+    console.log(id, ' joined room');
 
     if (!roomDetails[roomName]) {
       roomDetails[roomName] = {
@@ -46,23 +47,24 @@ io.on('connection', (socket) => {
       };
     }
 
-    if (!socket.rooms[roomName]) {
-      socket.join(roomName);
-      console.log('user joined room: ' + roomName);
-      roomDetails[roomName].userList.push(userName);
-    }
+    socket.join(roomName);
+    console.log('user joined room: ' + roomName);
+    roomDetails[roomName].userList.push(userName);
+    console.log(roomDetails[roomName].userList);
 
     socket.emit('synchronizePlayList', roomDetails[roomName].queue);
     socket.emit('playVideo', roomDetails[roomName].playingVideo);
     socket.emit('playbackState', roomDetails[roomName].playbackState);
-    socket.emit('setProgress', roomDetails[roomName].stopwatch.getSeconds());
+    socket.emit('setTime', roomDetails[roomName].stopwatch.getSeconds());
     socket.emit('synchronizeUserList', roomDetails[roomName].userList);
   });
 
   // @@TODO destroy room object on last leave
   socket.on('disconnect', () => {
-    const list = roomDetails[roomName].userList;
-    if (list) list.splice(list.indexOf(userName));
+    if (roomDetails[roomName]) {
+      const list = roomDetails[roomName].userList;
+      if (list) list.splice(list.indexOf(userName));
+    }
   });
 
   socket.on('search', (searchTerm) => {
@@ -107,10 +109,10 @@ io.on('connection', (socket) => {
     synchronizePlaylist();
   });
 
-  // socket.on('setProgress', (val) => {
-  //   roomDetails[roomName].stopwatch.setTime(val);
-  //   emitToRoomExceptHimself('setTime', val);
-  // });
+  socket.on('setProgress', (val) => {
+    roomDetails[roomName].stopwatch.setTime(val);
+    emitToRoomExceptHimself('setTime', val);
+  });
 
   socket.on('deleteFromPlaylist', (index) => {
     if (roomDetails[roomName].queue[index]) {
@@ -120,40 +122,35 @@ io.on('connection', (socket) => {
     synchronizePlaylist();
   });
 
-  socket.on('clearInterval', () => {
-    roomDetails[roomName].stopwatch.clearInt();
-  });
   // END Socket behavior for all clients
 
   // Helper methods emitting to all sockets in the room
   const playNext = (video) => {
-    roomDetails[roomName].stopwatch.stop();
-    if (!video && roomDetails[roomName].queue.length === 0) {
+    const room = roomDetails[roomName];
+    if (room.stopwatch) room.stopwatch.stop();
+    if (!video && room.queue.length === 0) {
       console.log('empty playlist, will delete current video');
       emitToRoom('emptyPlayback');
       synchronizePlaylist();
       return;
     }
-    roomDetails[roomName].playingVideo = video
-      ? video
-      : roomDetails[roomName].queue[0];
+    room.playingVideo = video ? video : room.queue[0];
     if (!video) {
-      roomDetails[roomName].queue.shift();
+      room.queue.shift();
     }
-    if (roomDetails[roomName].playingVideo) {
-      emitToRoom('playVideo', roomDetails[roomName].playingVideo);
 
-      const synchronizeProgress = () => {
-        emitToRoom('setTime', roomDetails[roomName].stopwatch.getSeconds());
-      };
+    const synchronizeProgress = () => {
+      emitToRoom('setTime', room.stopwatch.getSeconds());
+    };
 
-      roomDetails[roomName].playbackState = true;
-      console.log('video set, let"ts start watching'); 
-      roomDetails[roomName].stopwatch = new StopWatch(
-        roomDetails[roomName].playingVideo.duration,
+    if (room.playingVideo) {
+      emitToRoom('playVideo', room.playingVideo);
+      room.playbackState = true;
+      room.stopwatch = new StopWatch(
+        room.playingVideo.duration,
         synchronizeProgress,
       );
-      roomDetails[roomName].stopwatch.timer.then(() => playNext());
+      room.stopwatch.timer.then(() => playNext());
     }
 
     synchronizePlaylist();

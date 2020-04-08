@@ -1,28 +1,20 @@
 const moment = require('moment');
 
 class StopWatch {
-  // seconds
   limit = 0;
-  pausedAt = 0;
-  pausedOffset = 0;
-  setTimeOffset = 0;
-
-  // milliseconds
-  startedTime = 0;
-  pausedTime = 0;
-
+  currentTime = 0;
   paused = false;
+
   timer;
-
   savedInterval;
+  savedCallback;
 
-  // // separate function as attribute to make the interval more independant
-  interval(resolve, callback) {
-    let i = 0;
+  // separate function as attribute to make the interval more independant
+  interval(resolve) {
     return setInterval(() => {
-      console.log(' interval still going: \n', this.getSeconds(), this.limit);
-      if (callback && !this.paused) callback();
-      if (this.getSeconds() >= this.limit) {
+      if (!this.paused) this.currentTime += 1;
+      if (this.callback && !this.paused) this.callback();
+      if (this.currentTime >= this.limit) {
         resolve(true);
         clearInterval(this.savedInterval);
       }
@@ -30,60 +22,40 @@ class StopWatch {
   }
 
   // limit is in seconds
-  constructor(limit, callback) {
-    if (limit !== undefined) {
-      this.start(limit, callback);
-    }
+  constructor(limit = 0, callback = () => {}) {
+    this.limit = limit;
+    this.savedCallback = callback;
   }
 
-  start(limit, callback) {
+  start() {
     clearInterval(this.savedInterval);
-    this.paused = false;
-    this.pausedAt = 0;
-    this.pausedOffset = 0;
-    this.setTimeOffset = 0;
-    // adding one second to limit because... buffer....
-    this.limit = limit + 1;
-    this.startedTime = moment();
+    this.currentTime = 0;
+    this.paused = true;
     this.timer = new Promise((resolve, reject) => {
-      this.savedInterval = this.interval(resolve, callback);
+      this.savedInterval = this.interval(resolve);
     });
   }
 
   setTime(time) {
-    this.setTimeOffset += this.getSeconds() - time;
+    this.currentTime = time;
   }
 
   pause() {
-    this.pausedAt = this.getSeconds();
-    this.pausedTime = moment();
     this.paused = true;
   }
 
   continue() {
     this.paused = false;
-    this.pausedAt = 0;
-    this.pausedOffset += moment() - this.pausedTime;
   }
 
   stop() {
     this.paused = true;
-    this.pausedAt = 0;
-    this.pausedOffset = 0;
-    this.startedTime = 0;
-    if(this.timer) this.timer.resolve();
-
     clearInterval(this.savedInterval);
   }
 
   getSeconds() {
-    return this.paused
-      ? this.pausedAt
-      : milliToSeconds(moment() - this.pausedOffset - this.startedTime) -
-          this.setTimeOffset;
+    return this.currentTime;
   }
 }
-
-const milliToSeconds = (ms) => Math.floor(ms / 1000);
 
 module.exports = StopWatch;
