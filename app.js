@@ -1,5 +1,5 @@
 const yts = require('yt-search');
-const StopWatch = require('./stopwatch_old');
+const StopWatch = require('./stopwatch');
 const fs = require('fs');
 
 const roomDetails = [];
@@ -64,7 +64,14 @@ io.on('connection', (socket) => {
     if (roomDetails[roomName]) {
       const list = roomDetails[roomName].userList;
       if (list) list.splice(list.indexOf(userName));
+      if (list.length === 0) roomDetails[roomName] = null;
     }
+    // get rid of event listeners
+    Object.keys(socket._events).forEach((ev) => {
+      socket.listeners(ev).forEach((callback) => {
+        socket.off(ev, callback);
+      });
+    });
   });
 
   socket.on('search', (searchTerm) => {
@@ -142,7 +149,6 @@ io.on('connection', (socket) => {
     const synchronizeProgress = () => {
       emitToRoom('setTime', room.stopwatch.getSeconds());
     };
-
     if (room.playingVideo) {
       emitToRoom('playVideo', room.playingVideo);
       room.playbackState = true;
@@ -150,6 +156,8 @@ io.on('connection', (socket) => {
         room.playingVideo.duration,
         synchronizeProgress,
       );
+      room.stopwatch.start();
+      console.log(room);
       room.stopwatch.timer.then(() => playNext());
     }
 

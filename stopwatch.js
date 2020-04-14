@@ -12,8 +12,12 @@ class StopWatch {
   // separate function as attribute to make the interval more independant
   interval(resolve) {
     return setInterval(() => {
-      if (!this.paused) this.currentTime += 1;
-      if (this.callback && !this.paused) this.callback();
+      if(!this.paused) {
+        this.currentTime += 1;
+        if(this.savedCallback) {
+          this.savedCallback();
+        }
+      }
       if (this.currentTime >= this.limit) {
         resolve(true);
         clearInterval(this.savedInterval);
@@ -30,7 +34,7 @@ class StopWatch {
   start() {
     clearInterval(this.savedInterval);
     this.currentTime = 0;
-    this.paused = true;
+    this.paused = false;
     this.timer = new Promise((resolve, reject) => {
       this.savedInterval = this.interval(resolve);
     });
