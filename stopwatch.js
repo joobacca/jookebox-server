@@ -1,5 +1,3 @@
-const moment = require('moment');
-
 class StopWatch {
   limit = 0;
   currentTime = 0;
