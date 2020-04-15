@@ -45,6 +45,7 @@ io.on('connection', (socket) => {
         stopwatch: new StopWatch(),
         userList: [],
       };
+      console.log('room created');
     }
 
     socket.join(roomName);
@@ -56,16 +57,23 @@ io.on('connection', (socket) => {
     socket.emit('playVideo', roomDetails[roomName].playingVideo);
     socket.emit('playbackState', roomDetails[roomName].playbackState);
     socket.emit('setTime', roomDetails[roomName].stopwatch.getSeconds());
-    socket.emit('synchronizeUserList', roomDetails[roomName].userList);
+    emitToRoom('synchronizeUserList', roomDetails[roomName].userList);
   });
 
   // @@TODO destroy room object on last leave
   socket.on('disconnect', () => {
     if (roomDetails[roomName]) {
       const list = roomDetails[roomName].userList;
-      if (list) list.splice(list.indexOf(userName));
-      if (list.length === 0) roomDetails[roomName] = null;
+      if (list) list.splice(list.indexOf(userName), 1);
+      emitToRoomExceptHimself(
+        'synchronizeUserList',
+        roomDetails[roomName].userList,
+      );
+      if (list.length === 0) {
+        clearRoom();
+      }
     }
+
     // get rid of event listeners
     Object.keys(socket._events).forEach((ev) => {
       socket.listeners(ev).forEach((callback) => {
@@ -117,7 +125,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('setProgress', (val) => {
-    roomDetails[roomName].stopwatch.setTime(val);
+    const room = roomDetails[roomName];
+    if (room) room.stopwatch.setTime(val);
     emitToRoomExceptHimself('setTime', val);
   });
 
@@ -147,7 +156,7 @@ io.on('connection', (socket) => {
     }
 
     const synchronizeProgress = () => {
-      emitToRoom('setTime', room.stopwatch.getSeconds());
+      emitToRoom('synchronizeProgress', room.stopwatch.getSeconds());
     };
     if (room.playingVideo) {
       emitToRoom('playVideo', room.playingVideo);
@@ -157,12 +166,17 @@ io.on('connection', (socket) => {
         synchronizeProgress,
       );
       room.stopwatch.start();
-      console.log(room);
       room.stopwatch.timer.then(() => playNext());
     }
 
     synchronizePlaylist();
   };
+
+  const clearRoom = () => {
+    const room = roomDetails[roomName];
+    room.stopwatch.stop();
+    roomDetails[roomName] = null;
+  }
 
   const synchronizePlaylist = () => {
     emitToRoom('synchronizePlayList', roomDetails[roomName].queue);
