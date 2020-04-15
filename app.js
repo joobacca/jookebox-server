@@ -51,11 +51,10 @@ io.on('connection', (socket) => {
     socket.join(roomName);
     console.log('user joined room: ' + roomName);
     roomDetails[roomName].userList.push(userName);
-    console.log(roomDetails[roomName].userList);
 
     socket.emit('synchronizePlayList', roomDetails[roomName].queue);
     socket.emit('playVideo', roomDetails[roomName].playingVideo);
-    socket.emit('playbackState', roomDetails[roomName].playbackState);
+    socket.emit('toggle', roomDetails[roomName].playbackState);
     socket.emit('setTime', roomDetails[roomName].stopwatch.getSeconds());
     emitToRoom('synchronizeUserList', roomDetails[roomName].userList);
   });
