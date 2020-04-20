@@ -51,12 +51,11 @@ io.on('connection', (socket) => {
     socket.join(roomName);
     console.log('user joined room: ' + roomName);
     roomDetails[roomName].userList.push(userName);
-
+    emitToRoom('synchronizeUserList', roomDetails[roomName].userList);
     socket.emit('synchronizePlayList', roomDetails[roomName].queue);
     socket.emit('playVideo', roomDetails[roomName].playingVideo);
     socket.emit('toggle', roomDetails[roomName].playbackState);
     socket.emit('setTime', roomDetails[roomName].stopwatch.getSeconds());
-    emitToRoom('synchronizeUserList', roomDetails[roomName].userList);
   });
 
   // @@TODO destroy room object on last leave
@@ -82,6 +81,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('search', (searchTerm) => {
+    console.log('searched!');
     yts(
       {
         query: searchTerm,
@@ -154,16 +154,12 @@ io.on('connection', (socket) => {
       room.queue.shift();
     }
 
-    const synchronizeProgress = () => {
-      emitToRoom('synchronizeProgress', room.stopwatch.getSeconds());
-    };
     if (room.playingVideo) {
       emitToRoom('playVideo', room.playingVideo);
       room.playbackState = true;
-      room.stopwatch = new StopWatch(
-        room.playingVideo.duration,
-        synchronizeProgress,
-      );
+      room.stopwatch = new StopWatch(room.playingVideo.duration, () => {
+        emitToRoom('synchronizeProgress', room.stopwatch.getSeconds());
+      });
       room.stopwatch.start();
       room.stopwatch.timer.then(() => playNext());
     }
@@ -175,7 +171,7 @@ io.on('connection', (socket) => {
     const room = roomDetails[roomName];
     room.stopwatch.stop();
     roomDetails[roomName] = null;
-  }
+  };
 
   const synchronizePlaylist = () => {
     emitToRoom('synchronizePlayList', roomDetails[roomName].queue);
