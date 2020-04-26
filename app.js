@@ -1,26 +1,12 @@
 const yts = require('yt-search');
 const StopWatch = require('./stopwatch');
-const fs = require('fs');
+const http = require('http');
 
 const roomDetails = [];
 
 require('dotenv').config();
 
-var server;
-
-if (process.env.ENV === 'development') {
-  // Initialize http server
-  const http = require('http');
-  server = http.createServer();
-} else {
-  // or https server
-  const https = require('https');
-  const options = {
-    key: fs.readFileSync(process.env.SSL_KEY),
-    cert: fs.readFileSync(process.env.SSL_CERT),
-  };
-  server = https.createServer(options);
-}
+const server = http.createServer();
 server.listen(8081);
 console.log('Server running.');
 
@@ -80,6 +66,24 @@ io.on('connection', (socket) => {
     });
   });
 
+  socket.on('synchronizeApp', () => {
+    if (roomDetails[roomName]) {
+      socket.emit('synchronizePlayList', roomDetails[roomName].queue);
+      socket.emit('playVideo', roomDetails[roomName].playingVideo);
+      socket.emit('toggle', roomDetails[roomName].playbackState);
+      socket.emit('setTime', roomDetails[roomName].stopwatch.getSeconds());
+      console.log('sent details out');
+    }
+  });
+
+  socket.on('getUserList', () => {
+    socket.emit('synchronizeUserList', roomDetails[roomName].userList);
+  });
+
+  socket.on('getPlayList', () => {
+    socket.emit('synchronizePlayList', roomDetails[roomName].queue);
+  });
+
   socket.on('search', (searchTerm) => {
     console.log('searched!');
     yts(
@@ -102,7 +106,6 @@ io.on('connection', (socket) => {
     if (roomDetails[roomName].playbackState) {
       roomDetails[roomName].playbackState = false;
       roomDetails[roomName].stopwatch.pause();
-      // roomDetails[roomName].pausedAt = roomDetails[roomName].stopwatch.getSeconds();
     } else {
       roomDetails[roomName].playbackState = true;
       roomDetails[roomName].stopwatch.continue();
