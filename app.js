@@ -42,6 +42,7 @@ io.on('connection', (socket) => {
     socket.emit('playVideo', roomDetails[roomName].playingVideo);
     socket.emit('toggle', roomDetails[roomName].playbackState);
     socket.emit('setTime', roomDetails[roomName].stopwatch.getSeconds());
+    socket.emit('joinedRoom');
   });
 
   // @@TODO destroy room object on last leave
